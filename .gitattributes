@@ -1,0 +1,7 @@
+# Konce linii: skrypty i jednostki uruchamiane na Linuksie oraz wektory z sumami - zawsze LF.
+deploy/*.sh          text eol=lf
+deploy/*.py          text eol=lf
+deploy/*.service     text eol=lf
+deploy/*.timer       text eol=lf
+prover/cavp/*.rsp    text eol=lf
+vectors/*.json       text eol=lf

@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "Sigelith Hourglass"
+abstract: >-
+  A public clock of sequential work for the Sigelith timestamp log: a proof of sequential work
+  (Cohen-Pietrzak 2018) on SHA-256, computed in segments on one CPU core. Each segment absorbs a
+  fresh Bitcoin block and the latest Sigelith checkpoint into its seed, chains to the previous
+  root and is stamped in the public log. It proves lower bounds on elapsed time under an explicit,
+  published assumption about hardware speed. Includes a dependency-free Rust prover and a
+  verifier using only the Python standard library.
+authors:
+  - family-names: Koch
+    given-names: Adam
+    orcid: "https://orcid.org/0009-0008-7882-7426"
+repository-code: "https://github.com/DeiFlagellum/sigelith-hourglass"
+url: "https://sigelith.org/hourglass/"
+license: Apache-2.0
+version: "0.1.0"
+keywords:
+  - proof of sequential work
+  - timestamping
+  - SHA-256
+  - transparency log
+  - Merkle tree
+  - Fiat-Shamir
+references:
+  - type: conference-paper
+    title: "Simple Proofs of Sequential Work"
+    authors:
+      - family-names: Cohen
+        given-names: Bram
+      - family-names: Pietrzak
+        given-names: Krzysztof
+    collection-title: "Advances in Cryptology - EUROCRYPT 2018"
+    year: 2018

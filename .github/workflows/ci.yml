@@ -1,0 +1,46 @@
+# Bramka jakosci przy push i PR: prover w Ruscie, implementacja referencyjna, wektory,
+# NIST CAVP i test roznicowy SHA-256 z hashlib.
+name: ci
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust 1.87
+        run: |
+          rustup toolchain install 1.87 --profile minimal
+          rustup default 1.87
+
+      - name: Prover - budowa i testy
+        run: |
+          cargo build --release --manifest-path prover/Cargo.toml
+          cargo test --release --manifest-path prover/Cargo.toml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Implementacja referencyjna, prover kontra wektory, petla run (kill i wznowienie), synchronizacja.
+      - name: Testy
+        run: python -I -m unittest discover -s tests -v
+
+      - name: Autotest i NIST CAVP
+        run: |
+          prover/target/release/hourglass selftest
+          prover/target/release/hourglass cavp prover/cavp
+
+      # 10^6 losowych wejsc w CI; 10^7 - lokalnie (README).
+      - name: Test roznicowy SHA-256 z hashlib
+        env:
+          HOURGLASS_DIFF_COUNT: '1000000'
+        run: python -I -m unittest discover -s tests -k differential -v

@@ -1,0 +1,48 @@
+[Unit]
+Description=Sigelith Hourglass (Klepsydra) - prover, faza 0
+Documentation=https://sigelith.org/spec/
+# Celowo bez zaleznosci od strony, Dockera, bazy i sieci (HOURGLASS.md D16).
+
+[Service]
+User=hourglass
+Group=hourglass
+WorkingDirectory=/srv/docker_data/beattime/hourglass
+ExecStart=/usr/local/bin/hourglass run --dir /srv/docker_data/beattime/hourglass
+Restart=always
+RestartSec=30
+# Najwyzej jeden rdzen i tylko czas procesora, ktorego nie chce nikt inny - uslugi Sigelith
+# maja pierwszenstwo (HOURGLASS.md D13). Przy cgroup v2 sam Nice nie wystarcza (dziala tylko
+# wewnatrz wlasnej grupy), stad CPUWeight=idle.
+CPUQuota=100%
+CPUWeight=idle
+Nice=19
+IOSchedulingClass=idle
+MemoryMax=512M
+# Prover czyta i pisze wylacznie pliki w katalogu danych - bez sieci i bez uprawnien.
+PrivateNetwork=yes
+RestrictAddressFamilies=none
+ProtectSystem=strict
+ReadWritePaths=/srv/docker_data/beattime/hourglass
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

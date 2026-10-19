@@ -1,0 +1,19 @@
+[package]
+name = "sigelith-hourglass"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Sigelith Hourglass (Klepsydra) - prover dowodu pracy sekwencyjnej Cohena-Pietrzaka na SHA-256"
+
+# Celowo brak zaleznosci: wlasne SHA-256, bez bibliotek VDF/PoSW (HOURGLASS.md D3, D6).
+[dependencies]
+
+[[bin]]
+name = "hourglass"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,11 @@
+sigelith-hourglass
+Copyright 2026 DeiFlagellum
+
+This product includes software developed as part of the Sigelith project
+(https://sigelith.org).
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+The prover uses only the Rust standard library and the reference implementation only the
+Python standard library; neither links third-party code. prover/cavp/ holds NIST CAVP test
+vectors for SHA-256, a work of the U.S. Government (see prover/cavp/PROVENANCE.txt).

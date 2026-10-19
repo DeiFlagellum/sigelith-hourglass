@@ -1,0 +1,15 @@
+Wektory testowe NIST CAVP dla SHA-256 (wersja bajtowa), bez zmian tresci
+(tylko konce linii CRLF -> LF).
+
+Zrodlo: NIST Cryptographic Algorithm Validation Program, Secure Hashing,
+https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/shs/shabytetestvectors.zip
+Pobrane: 2026-10-19
+SHA-256 archiwum: 929ef80b7b3418aca026643f6f248815913b60e01741a44bba9e118067f4c9b8
+
+Pliki (SHA-256 po zamianie koncow linii):
+aaf8115ef18263c52a7d2478d72b37dea30b25a1f7d0497136fbf7950715c587  SHA256ShortMsg.rsp
+b1f63358201511b72aa8e21234df37cf3287e95337dc2adb3d219968bedfa6a2  SHA256LongMsg.rsp
+bf577cba16823c78e580403b247dabb03b393ba47c0eb32db42dec5a19b175af  SHA256Monte.rsp
+
+Wektory sa praca rzadu USA (domena publiczna). Uzywa ich `hourglass cavp cavp/`
+(HOURGLASS.md D3).
