@@ -1,2 +1,4 @@
 # plik provera na Linuksa - budowany lokalnie (README.md), z suma w dist/hourglass.sha256
 /dist/
+# tylko w pakiecie niezaleznego operatora - nigdy na serwerze Sigelith (README.md)
+/operator.env

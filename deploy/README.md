@@ -13,6 +13,7 @@ finished records through the public Sigelith API.
 | `hourglass-sync.service`, `.timer` | runs the sync every 60 s (`systemd-analyze security`: 1.5 OK) |
 | `hourglass-v1.service`, `hourglass-v1-sync.service`, `.timer` | the same for v1, in `/srv/docker_data/beattime/hourglass-v1`: the prover writes records without a key; the Sigelith server signs, stamps and publishes them (SPEC.md §8) and reads the directory read-only |
 | `dist/hourglass`, `dist/hourglass.sha256` | static Linux build (musl) — built locally, not in git |
+| `operator.env.example` | template of `operator.env`, which exists only in the package of an independent operator (below) |
 
 On the server: program in `/usr/local/bin/hourglass` and `/usr/local/lib/hourglass/`, data in
 `/srv/docker_data/beattime/hourglass` (system user `hourglass`), next to the other persistent
@@ -47,6 +48,28 @@ segment records a `restart` gap). A build that changed the label computation can
 silently: the segment's own proof fails the self-check and the record is not published.
 
 Stop without deleting data: `systemctl disable --now hourglass-p0.service hourglass-sync.timer`.
+
+## An independent operator's clock
+
+Another operator can run a clock of its own, on its own hardware (SPEC.md §10.2: the minimum
+age of an entry is the maximum over the clocks). The operator gets this directory and
+`prover/cavp/`, with one more file, `deploy/operator.env` (from `operator.env.example`):
+`OPERATOR`, the operator identifier that goes into the genesis for good (customarily the
+operator's domain), and `DATA_V1`, the data directory. The file never exists on the Sigelith
+server.
+
+With it, `install.sh` accepts only `check`, `install-v1`, `start-v1`, `status-v1` and
+`upgrade`, installs only the v1 units (with `DATA_V1` in them), and `start-v1` prints the root
+`phi_0` of the genesis. The prover still writes records without a key. The operator's own
+`sigelith-cosigner clock-push` (sigelith-cosigner `PROTOCOL.md` §10, `OPERATOR.md` §8) checks
+every record, signs it with the clock key and sends it to the Sigelith log, which pins that key
+and `phi_0`, checks each record again and publishes the clock. The data directory is readable by
+the group `hourglass` only; the `clock-push` container joins it with `group_add` (`install-v1`
+prints the gid).
+
+Order: `check`, `install-v1`, `start-v1` (once), the `clock-push` service with a new clock key
+(`clock-key`), then the key and `phi_0` go to Sigelith; publication starts by itself as soon as
+both are pinned there.
 
 ## Backups and restore
 

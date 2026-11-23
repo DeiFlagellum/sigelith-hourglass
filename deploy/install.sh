@@ -19,6 +19,12 @@
 #   bash deploy/install.sh start-v1    genesis v1 (RAZ; operator i predkosc odniesienia) i prover v1
 #   bash deploy/install.sh status-v1   uslugi, stan, ostatnie odcinki, metryki, dziennik v1
 #
+# Zegar niezaleznego operatora (HOURGLASS.md D18; deploy/README.md): plik deploy/operator.env
+# z pakietu dla operatora ustawia OPERATOR (identyfikator w genesis) i DATA_V1 (katalog danych).
+# Wtedy dzialaja wylacznie polecenia v1 (check, install-v1, start-v1, status-v1, upgrade), a rekordy
+# podpisuje i wysyla do Sigelith program operatora (sigelith-cosigner clock-push, osobny klucz).
+# Na serwerze Sigelith tego pliku nie ma - zostaja wartosci ponizej.
+#
 # Program: /usr/local/bin/hourglass i /usr/local/lib/hourglass/ (wlasnosc root, domyslne etykiety
 # SELinux tych katalogow). Dane (wlasnosc hourglass): p0 /srv/docker_data/beattime/hourglass, v1
 # /srv/docker_data/beattime/hourglass-v1 - jak pozostale dane projektu, objete nocna kopia zapasowa
@@ -47,6 +53,27 @@ S_REF=1308141
 N_V1=32
 
 die() { echo "BLAD: $*" >&2; exit 1; }
+
+# Zegar niezaleznego operatora: tylko znane klucze, bez wykonywania pliku.
+INDEPENDENT=0
+DATA_V1_DEFAULT="$DATA_V1"
+if [ -f "$SRC/operator.env" ]; then
+    while IFS='=' read -r key value || [ -n "$key" ]; do
+        key="${key%$'\r'}"
+        value="${value%$'\r'}"
+        case "$key" in
+            OPERATOR) OPERATOR="$value" ;;
+            DATA_V1) DATA_V1="$value" ;;
+            ''|'#'*) ;;
+            *) die "operator.env: nieznany klucz $key (dozwolone: OPERATOR, DATA_V1)" ;;
+        esac
+    done < "$SRC/operator.env"
+    [[ "$OPERATOR" =~ ^[a-z0-9]([a-z0-9.-]{0,62}[a-z0-9])?$ ]] || die "operator.env: OPERATOR - 1-64 znakow a-z 0-9 . -"
+    [[ "$DATA_V1" =~ ^/[A-Za-z0-9._/-]+$ && "$DATA_V1" != *..* ]] || die "operator.env: DATA_V1 - sciezka bezwzgledna"
+    INDEPENDENT=1
+    UNITS="hourglass-v1.service hourglass-v1-sync.service hourglass-v1-sync.timer"
+fi
+v1_only() { [ "$INDEPENDENT" = 0 ] || die "zegar niezaleznego operatora ma tylko v1: check, install-v1, start-v1, status-v1, upgrade"; }
 need_root() { [ "$(id -u)" = 0 ] || die "uruchom jako root"; }
 p0_active() { systemctl is-active --quiet hourglass-p0.service; }
 v1_active() { systemctl is-active --quiet hourglass-v1.service; }
@@ -74,7 +101,13 @@ copy_files() {
     install -d -m 755 "$LIB" "$LIB/cavp"
     put_text "$SRC/hourglass_sync.py" "$LIB/hourglass_sync.py"
     for f in $CAVP_FILES; do put_text "$CAVP_SRC/$f" "$LIB/cavp/$f"; done
-    for u in $UNITS; do put_text "$SRC/$u" "/etc/systemd/system/$u"; done
+    for u in $UNITS; do
+        # katalog danych v1 z operator.env (u nas sciezka bez zmian)
+        tmp="$(mktemp)"
+        sed "s#$DATA_V1_DEFAULT#$DATA_V1#g" "$SRC/$u" > "$tmp"
+        put_text "$tmp" "/etc/systemd/system/$u"
+        rm -f "$tmp"
+    done
     systemctl daemon-reload
 }
 
@@ -127,6 +160,7 @@ check)
     echo "== CHECK OK"
     ;;
 install)
+    v1_only
     need_root
     p0_active && die "prover liczy - nowy plik provera: install.sh upgrade"
     v1_exists && die "faza 0 zakonczona (jest genesis v1) - dla v1: install.sh install-v1 albo upgrade"
@@ -140,6 +174,7 @@ install)
     echo "== INSTALL OK - prover jeszcze nie liczy; start: bash $SRC/install.sh start N"
     ;;
 start)
+    v1_only
     need_root
     N="${2:-}"
     { [[ "$N" =~ ^[0-9]+$ ]] && [ "$N" -ge 20 ] && [ "$N" -le 40 ]; } || die "podaj n (20..40) - glebokosc odcinka, np. 31"
@@ -172,6 +207,7 @@ upgrade)
     echo "== UPGRADE OK (prover p0: $(systemctl is-active hourglass-p0.service || true), v1: $(systemctl is-active hourglass-v1.service || true))"
     ;;
 move-data)
+    v1_only
     # Jednorazowo (2026-10-19): dane z /srv/hourglass/data do katalogu danych projektu, objetego
     # nocna kopia zapasowa. Najpierw wszystkie sprawdzenia - przy pierwszym problemie nic nie zmieniamy.
     need_root
@@ -198,6 +234,7 @@ move-data)
     echo "== MOVE OK (prover: $(systemctl is-active hourglass-p0.service || true), synchronizacja: $(systemctl is-active hourglass-sync.timer || true))"
     ;;
 stop-p0)
+    v1_only
     # Przejscie na v1 (HOURGLASS.md pkt 12): ciag p0 konczy sie w chwili startu v1. Prover p0 zostaje
     # wylaczony na stale (po restarcie serwera tez nie wstanie); genesis, rekordy, dowody i kwity
     # zostaja na miejscu i sa publiczne. Odcinek liczony w chwili zatrzymania nie bedzie rekordem.
@@ -226,7 +263,13 @@ install-v1)
     [ -s "$DATA_V1/inputs.txt" ] || die "synchronizacja v1 nie zapisala $DATA_V1/inputs.txt - zobacz: journalctl -u hourglass-v1-sync -n 20"
     echo "== wejscia do ziarna v1 ($DATA_V1/inputs.txt):"
     cat "$DATA_V1/inputs.txt"
-    echo "== INSTALL-V1 OK - prover v1 jeszcze nie liczy; start: bash $SRC/install.sh start-v1 (najpierw stop-p0)"
+    if [ "$INDEPENDENT" = 1 ]; then
+        echo "== operator $OPERATOR, dane $DATA_V1"
+        echo "== grupa hourglass, gid dla group_add uslugi clock-push: $(getent group hourglass | cut -d: -f3)"
+        echo "== INSTALL-V1 OK - prover v1 jeszcze nie liczy; start: bash $SRC/install.sh start-v1"
+    else
+        echo "== INSTALL-V1 OK - prover v1 jeszcze nie liczy; start: bash $SRC/install.sh start-v1 (najpierw stop-p0)"
+    fi
     ;;
 start-v1)
     need_root
@@ -244,11 +287,18 @@ start-v1)
     echo "== genesis.json:"
     cat "$DATA_V1/genesis.json"; echo
     echo "== prover v1: $(systemctl is-active hourglass-v1.service || true)"
-    echo "== korzen genesis v1 (phi_0) - do .env strony:"
-    echo "HOURGLASS_V1_EXPECT_GENESIS=$root"
-    echo "== START-V1 OK - genesis i rekordy podpisze, ostempluje i opublikuje serwer (apps/tsa/hourglass.py)"
+    if [ "$INDEPENDENT" = 1 ]; then
+        echo "== korzen genesis v1 (phi_0) - wyslij Sigelith razem z kluczem zegara (clock-key):"
+        echo "phi_0=$root"
+        echo "== START-V1 OK - rekordy podpisuje i wysyla clock-push (sigelith-cosigner), publikuje serwer Sigelith"
+    else
+        echo "== korzen genesis v1 (phi_0) - do .env strony:"
+        echo "HOURGLASS_V1_EXPECT_GENESIS=$root"
+        echo "== START-V1 OK - genesis i rekordy podpisze, ostempluje i opublikuje serwer (apps/tsa/hourglass.py)"
+    fi
     ;;
 status)
+    v1_only
     show_status "$DATA" hourglass-p0.service hourglass-sync.timer hourglass-sync.service
     ;;
 status-v1)
