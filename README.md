@@ -12,10 +12,12 @@ k times faster than the measured prover". It is not a VDF: a VDF from hash funct
 not exist in the random-oracle model, and the price of a hash-only construction is that the
 checks guarantee only a share of the work (`claim_permille`, SPEC.md §6).
 
-**Status: phase 0, a 30-day measurement** on the Sigelith production server, from 2026-10-19
-(genesis stamped as log entry #453) to 2026-11-18, with test identifiers `p0`. k = 20 is an
-assumption until the measurement ends; nothing derived from phase 0 appears on Sigelith
-certificates. After phase 0: analysis, a public note, then parameters and a genesis for `v1`.
+**Status: phase 0 is complete.** It was a 30-day measurement on the Sigelith production server,
+from 2026-10-19 (genesis stamped as log entry #453) to 2026-11-18, with test identifiers `p0`.
+The results, the dataset (records, proofs, stamp receipts, per-minute metrics) and the analysis
+scripts are in technical note no. 1: https://doi.org/10.5281/zenodo.24460343. k = 20 remains a
+published assumption, justified in the note; nothing derived from phase 0 appears on Sigelith
+certificates. Next: parameters and a genesis for `v1`.
 
 ## What it does not do
 
