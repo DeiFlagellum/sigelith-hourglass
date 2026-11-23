@@ -15,6 +15,8 @@ od strony, bazy ani sieci; ten skrypt zapisuje mu tylko plik).
    Brak ktoregos zrodla nigdy nie zatrzymuje provera - zostaja ostatnie znane wartosci.
 2. Stemple: genesis.json i kazdy nowy segments/<j>.json -> POST /api/proof/stamp {"digest"};
    odpowiedz (z kwitem sigelith-receipt-v1) zapisana obok jako <plik>.receipt.json.
+   Tylko faza 0: w v1 rekordy podpisuje i stempluje serwer Sigelith przy publikacji
+   (SPEC.md §8), wiec dla genesis v1 synchronizacja dostarcza wylacznie wejscia.
 
     python3 -I hourglass_sync.py --dir /srv/hourglass/data [--api https://sigelith.org]
 """
@@ -38,6 +40,7 @@ BTC_SOURCES = (
 BTC_DEPTH = 3
 PTB_SERVERS = ('ptbtime1.ptb.de', 'ptbtime2.ptb.de', 'ptbtime3.ptb.de', 'ptbtime4.ptb.de')
 MAX_STAMPS_PER_RUN = 5          # limit publicznego API: 20 stempli na minute
+V1_GENESIS = 'sigelith-hourglass-genesis-v1'
 _HEX64 = re.compile(r'^[0-9a-f]{64}$')
 _HEIGHT = re.compile(r'^\d{1,9}$')
 
@@ -187,6 +190,15 @@ def update_inputs(data_dir: str, api: str) -> dict:
     return kv
 
 
+def server_publishes(data_dir: str) -> bool:
+    """v1: rekordy podpisuje i stempluje serwer Sigelith przy publikacji (SPEC.md §8)."""
+    try:
+        with open(os.path.join(data_dir, 'genesis.json'), 'rb') as fh:
+            return json.load(fh).get('v') == V1_GENESIS
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def stamp_new_files(data_dir: str, api: str, limit: int = MAX_STAMPS_PER_RUN) -> list:
     """Stempluje genesis.json i rekordy odcinkow, ktore nie maja jeszcze kwitu."""
     files = []
@@ -224,7 +236,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     os.makedirs(a.dir, exist_ok=True)
     kv = update_inputs(a.dir, a.api.rstrip('/'))
-    stamped = stamp_new_files(a.dir, a.api.rstrip('/'))
+    stamped = [] if server_publishes(a.dir) else stamp_new_files(a.dir, a.api.rstrip('/'))
     print(f"hourglass-sync: checkpoint {kv.get('checkpoint_n', '-')}, blok {kv.get('btc_height', '-')}, "
           f"offset {kv.get('ptb_offset_us') or '-'} us, ostemplowane: {', '.join(stamped) or '-'}")
     return 0

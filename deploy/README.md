@@ -1,4 +1,4 @@
-# Deployment on the Sigelith server (phase 0)
+# Deployment on the Sigelith server (phase 0 and v1)
 
 The prover runs as a systemd service **outside Docker and outside the website's compose
 stack**: no network, no privileges, at most one CPU core and only CPU time nobody else wants.
@@ -7,10 +7,11 @@ finished records through the public Sigelith API.
 
 | file | role |
 | --- | --- |
-| `install.sh` | `check`, `install`, `start N`, `upgrade`, `status`, `move-data` — see the script header |
+| `install.sh` | `check`, `upgrade`; phase 0: `install`, `start N`, `status`, `move-data`, `stop-p0`; v1: `install-v1`, `start-v1`, `status-v1` (see the script header) |
 | `hourglass-p0.service` | the prover (`hourglass run`): restart always, `CPUQuota=100%`, `CPUWeight=idle` (with cgroup v2, `Nice` alone does not yield to other groups), `PrivateNetwork=yes`, full hardening (`systemd-analyze security`: 0.8 SAFE) |
-| `hourglass_sync.py` | writes `inputs.txt` — the Bitcoin block at depth 3 on which two sources agree, the latest Sigelith checkpoint, and the clock offset to PTB from `chronyc` when chrony follows a PTB server — and stamps `genesis.json` and `segments/<j>.json`, keeping the receipts next to them |
+| `hourglass_sync.py` | writes `inputs.txt` (the Bitcoin block at depth 3 on which two sources agree, the latest Sigelith checkpoint, and the clock offset to PTB from `chronyc` when chrony follows a PTB server) and, in phase 0, stamps `genesis.json` and `segments/<j>.json`, keeping the receipts next to them (in `v1` the Sigelith server signs and stamps each record when it publishes it, SPEC.md §8) |
 | `hourglass-sync.service`, `.timer` | runs the sync every 60 s (`systemd-analyze security`: 1.5 OK) |
+| `hourglass-v1.service`, `hourglass-v1-sync.service`, `.timer` | the same for v1, in `/srv/docker_data/beattime/hourglass-v1`: the prover writes records without a key; the Sigelith server signs, stamps and publishes them (SPEC.md §8) and reads the directory read-only |
 | `dist/hourglass`, `dist/hourglass.sha256` | static Linux build (musl) — built locally, not in git |
 
 On the server: program in `/usr/local/bin/hourglass` and `/usr/local/lib/hourglass/`, data in
@@ -38,6 +39,8 @@ line endings.
 3. `install.sh start N` — **once**: genesis (a 20 s start-up benchmark), prover start, genesis
    stamp. A second run refuses: the clock never starts from zero.
 4. `install.sh status` — services, state, latest segments, metrics, journal.
+
+From phase 0 to v1 (2026-11): `install.sh install-v1` (the v1 directory and its input sync; phase 0 keeps running), then `install.sh stop-p0` (the phase 0 prover is disabled for good, its last records are stamped, its data stays) and at once `install.sh start-v1` (the v1 genesis with `operator` and `s_ref_nodes_per_s`, the v1 prover, and the genesis root φ_0 for the server's configuration). `start-v1` refuses while the phase 0 prover runs and when a v1 genesis exists.
 
 A new prover build: `install.sh upgrade` (stop, replace, start — the state stays and the current
 segment records a `restart` gap). A build that changed the label computation cannot slip through

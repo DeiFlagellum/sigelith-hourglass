@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """hourglass_sync.py - wejscia do ziarna i stemple, z podmieniona siecia."""
+import contextlib
 import hashlib
 import io
 import json
@@ -96,6 +97,23 @@ class SyncTests(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(d, 'segments', '000002.receipt.json')))
             self.assertEqual(hs.stamp_new_files(d, 'https://sigelith.org'), [])   # drugi raz nic
             self.assertEqual(len(net.posts), 3)
+
+    def test_v1_is_stamped_by_the_server_not_by_the_sync(self):
+        # v1: rekord publikuje serwer dopiero po podpisie (SPEC.md §8) - sync daje tylko wejscia
+        net = FakeNet(routes())
+        hs._urlopen = net
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, 'segments'))
+            with open(os.path.join(d, 'genesis.json'), 'w', encoding='utf-8') as fh:
+                json.dump({'v': 'sigelith-hourglass-genesis-v1'}, fh)
+            with open(os.path.join(d, 'segments', '000001.json'), 'wb') as fh:
+                fh.write(b'{"j":1}')
+            self.assertTrue(hs.server_publishes(d))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(hs.main(['--dir', d, '--api', 'https://sigelith.org']), 0)
+            self.assertEqual(net.posts, [])
+            self.assertFalse(os.path.exists(os.path.join(d, 'segments', '000001.receipt.json')))
+            self.assertTrue(os.path.exists(os.path.join(d, 'inputs.txt')))
 
 
 class PtbOffsetTests(unittest.TestCase):

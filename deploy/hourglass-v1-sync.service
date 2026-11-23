@@ -1,0 +1,38 @@
+[Unit]
+Description=Sigelith Hourglass v1 - wejscia do ziarna (rekordy stempluje serwer po podpisaniu)
+Documentation=https://sigelith.org/spec/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hourglass
+Group=hourglass
+WorkingDirectory=/srv/docker_data/beattime/hourglass-v1
+ExecStart=/usr/bin/python3 -I /usr/local/lib/hourglass/hourglass_sync.py --dir /srv/docker_data/beattime/hourglass-v1
+TimeoutStartSec=55
+Nice=10
+# Tylko HTTPS do zrodel wejsc i API Sigelith oraz chronyc; zapis wylacznie w katalogu danych.
+# Dla genesis v1 synchronizacja niczego nie stempluje (hourglass_sync.server_publishes).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ProtectSystem=strict
+ReadWritePaths=/srv/docker_data/beattime/hourglass-v1
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
