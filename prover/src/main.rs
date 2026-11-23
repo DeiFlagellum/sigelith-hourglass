@@ -23,6 +23,7 @@ use sha256::Backend;
 
 const USAGE: &str = "uzycie:
   hourglass genesis --dir D --n N --t T --lambda L --k K [--tag p0] [--bench-seconds 20] [--backend B]
+  hourglass genesis --tag v1 --operator OP --s-ref S ...   v1: operator zegara i predkosc odniesienia
   hourglass run --dir D [--save-every-ms 5000] [--top D_TOP] [--max-segments M] [--backend B]
   hourglass selftest                         SHA-256 (FIPS), zgodnosc wersji, male drzewa
   hourglass cavp <katalog>                   wektory NIST CAVP (ShortMsg, LongMsg, Monte)
@@ -106,6 +107,8 @@ fn dispatch(args: &[String]) -> Result<(), String> {
                 t: a.num("t", None)?,
                 lambda: a.num("lambda", None)?,
                 k: a.num("k", None)?,
+                operator: a.get("operator").map(str::to_string),
+                s_ref: a.get("s-ref").map(|v| v.parse().map_err(|_| "--s-ref: zla liczba".to_string())).transpose()?,
                 bench_seconds: a.num("bench-seconds", Some(20.0))?,
                 backend: a.backend()?,
             },

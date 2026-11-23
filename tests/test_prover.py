@@ -114,6 +114,19 @@ class ProverTests(unittest.TestCase):
             out = run('proof', '--n', rec['n'], '--t', rec['t'], '--chi', rec['seed'], '--hex')
             self.assertEqual(out, [rec['root'], rec['proof']['sha256'], proof])
 
+    def test_v1_vectors(self):
+        chi, v1 = self.vectors['chi'], self.vectors['v1']
+        for tree in v1['trees']:
+            with self.subTest(n=tree['n']):
+                self.assertEqual(run('root', '--tag', 'v1', '--n', tree['n'], '--chi', chi), [tree['root']])
+        for pv in v1['proofs']:
+            out = run('proof', '--tag', 'v1', '--n', pv['n'], '--t', pv['t'], '--chi', chi, '--top', pv['n'] // 2, '--hex')
+            self.assertEqual(out, [pv['root'], pv['proof_sha256'], pv['proof']])
+        chain = v1['chain']
+        for rec, proof in zip(chain['segments'], chain['proofs']):
+            out = run('proof', '--tag', 'v1', '--n', rec['n'], '--t', rec['t'], '--chi', rec['seed'], '--hex')
+            self.assertEqual(out, [rec['root'], rec['proof']['sha256'], proof])
+
     def test_random_seeds_match_reference(self):
         for i in range(4):
             chi = hashlib.sha256(f'prover random {i}'.encode()).digest()

@@ -17,7 +17,9 @@ from 2026-10-19 (genesis stamped as log entry #453) to 2026-11-18, with test ide
 The results, the dataset (records, proofs, stamp receipts, per-minute metrics) and the analysis
 scripts are in technical note no. 1: https://doi.org/10.5281/zenodo.24460343. k = 20 remains a
 published assumption, justified in the note; nothing derived from phase 0 appears on Sigelith
-certificates. Next: parameters and a genesis for `v1`.
+certificates. The `v1` formats are specified in SPEC.md (2026-11-23): the phase 0 parameters,
+records signed by the publishing operator, a reference speed common to all clocks, and proofs of
+a requested age built from proof prefixes. Next: the `v1` genesis.
 
 ## What it does not do
 
@@ -30,16 +32,20 @@ certificates. Next: parameters and a genesis for `v1`.
 
 ## Check it yourself
 
-    python -I reference/hourglass_ref.py verify <directory with genesis.json and segments/>
+    python -I reference/hourglass_ref.py verify <directory with genesis.json and segments/> [--key <base64>]
+    python -I reference/hourglass_ref.py age <directory with segments i ... j> [--key <base64>]
 
 Python standard library only. It recomputes the genesis root, every seed, every proof and every
-rule of SPEC.md, and prints the minimum elapsed time under the published k.
+rule of SPEC.md, and prints the minimum elapsed time under the published k. `--key` is a key from
+the operator's published key history; with it, the v1 record signatures are checked too (Ed25519,
+also with the standard library only). `age` checks the segments from the one that absorbed an
+entry to the newest one, without the genesis, and accepts proof prefixes (SPEC.md §10.1).
 
 ## Contents
 
 | path | |
 | --- | --- |
-| `SPEC.md` | formats and algorithms (phase 0 draft) |
+| `SPEC.md` | formats and algorithms (v1; phase 0 differences in §13) |
 | `reference/` | reference implementation and verifier, Python standard library only; `gen_vectors.py` writes the test vectors |
 | `vectors/vectors.json` | test vectors for any implementation |
 | `prover/` | production prover in Rust with no dependencies: own SHA-256 (portable and SHA-NI), resumable run loop with durable state, proofs from subtrees; `prover/cavp/` — NIST CAVP vectors |

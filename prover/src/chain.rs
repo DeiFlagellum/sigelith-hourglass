@@ -82,6 +82,8 @@ pub fn seed(backend: Backend, tag: &str, j: u64, prev_root: &[u8; 32], inputs: &
 
 pub struct Genesis {
     pub tag: String,
+    /// v1: identyfikator operatora zegara (SPEC.md §7); p0: nieuzywany
+    pub operator: String,
     pub n: u32,
     pub t: u32,
     pub lambda: u32,
@@ -89,12 +91,27 @@ pub struct Genesis {
     pub btc: Btc,
     pub utc: String,
     pub k_assumed: u64,
+    /// p0: predkosc z pomiaru rozruchowego
     pub s_self: u64,
+    /// v1: wspolna predkosc odniesienia wszystkich zegarow (SPEC.md §10)
+    pub s_ref: u64,
+}
+
+/// SPEC.md §7 (v1): 1-64 znakow a-z, 0-9, '.', '-', na poczatku i na koncu litera albo cyfra.
+pub fn check_operator(s: &str) -> Result<(), String> {
+    let b = s.as_bytes();
+    let edge = |c: u8| c.is_ascii_lowercase() || c.is_ascii_digit();
+    let inner = |c: &u8| edge(*c) || *c == b'.' || *c == b'-';
+    if (1..=64).contains(&b.len()) && b.iter().all(inner) && edge(b[0]) && edge(b[b.len() - 1]) {
+        Ok(())
+    } else {
+        Err(format!("operator {s:?}: 1-64 znakow a-z 0-9 . -, na poczatku i na koncu litera albo cyfra"))
+    }
 }
 
 impl Genesis {
     pub fn json(&self) -> Result<Json, String> {
-        Ok(Json::obj(vec![
+        let mut pairs = vec![
             ("v", Json::str(format_id(&self.tag, "genesis")?)),
             ("hash", Json::str("sha-256")),
             ("n", Json::Int(i64::from(self.n))),
@@ -104,8 +121,18 @@ impl Genesis {
             ("btc", self.btc.json()),
             ("utc", Json::str(&self.utc)),
             ("k_assumed", Json::Int(self.k_assumed as i64)),
-            ("s_self_nodes_per_s", Json::Int(self.s_self as i64)),
-        ]))
+        ];
+        if self.tag == "p0" {
+            pairs.push(("s_self_nodes_per_s", Json::Int(self.s_self as i64)));
+        } else {
+            check_operator(&self.operator)?;
+            if self.s_ref < 1 {
+                return Err("v1: brak predkosci odniesienia s_ref".into());
+            }
+            pairs.push(("operator", Json::str(&self.operator)));
+            pairs.push(("s_ref_nodes_per_s", Json::Int(self.s_ref as i64)));
+        }
+        Ok(Json::obj(pairs))
     }
 
     /// phi_0 = SHA-256(P|genesis| ‖ JCS(genesis)).
@@ -238,9 +265,13 @@ pub struct Record {
     pub speed_max: u64,
     pub ptb_offset_us: Option<i64>,
     pub k_assumed: u64,
+    /// v1: predkosc odniesienia w chwili odcinka (SPEC.md §8, §10); p0: nieuzywana
+    pub s_ref: u64,
 }
 
 impl Record {
+    /// Rekord prosto z provera. W v1 bez `key` i `sig`: prover nigdy nie ma klucza (HOURGLASS.md
+    /// D16) - podpis dodaje publikujacy operator po sprawdzeniu odcinka (SPEC.md §8).
     pub fn json(&self) -> Result<Json, String> {
         let start = util::parse_utc(&self.inputs.utc)?;
         let end = util::parse_utc(&self.utc_end)?;
@@ -256,7 +287,7 @@ impl Record {
                 ])
             })
             .collect();
-        Ok(Json::obj(vec![
+        let mut pairs = vec![
             ("v", Json::str(format_id(&self.tag, "segment")?)),
             ("j", Json::Int(self.j as i64)),
             ("n", Json::Int(i64::from(self.n))),
@@ -281,7 +312,14 @@ impl Record {
             ("k_assumed", Json::Int(self.k_assumed as i64)),
             ("claim_permille", Json::Int(i64::from(claim_permille(self.t, self.lambda)))),
             ("coverage_permille", Json::Int(coverage_permille(self.n, self.speed_max, start, end) as i64)),
-        ]))
+        ];
+        if self.tag != "p0" {
+            if self.s_ref < 1 {
+                return Err("v1: brak predkosci odniesienia s_ref".into());
+            }
+            pairs.push(("s_ref_nodes_per_s", Json::Int(self.s_ref as i64)));
+        }
+        Ok(Json::obj(pairs))
     }
 }
 

@@ -91,6 +91,10 @@ pub struct GenesisOpts {
     pub t: u32,
     pub lambda: u32,
     pub k: u64,
+    /// v1: identyfikator operatora zegara (SPEC.md §7)
+    pub operator: Option<String>,
+    /// v1: wspolna predkosc odniesienia, wezly/s (SPEC.md §10)
+    pub s_ref: Option<u64>,
     pub bench_seconds: f64,
     pub backend: Backend,
 }
@@ -103,6 +107,20 @@ pub fn genesis(dir: &Path, o: &GenesisOpts) -> Result<(), String> {
     if !(1..=MAX_N).contains(&o.n) || !(1..=1024).contains(&o.t) || !(1..=256).contains(&o.lambda) || o.k < 1 {
         return Err("parametry poza zakresem (n 1..48, t 1..1024, lambda 1..256, k >= 1)".into());
     }
+    let (operator, s_ref) = if o.tag == "p0" {
+        if o.operator.is_some() || o.s_ref.is_some() {
+            return Err("--operator i --s-ref tylko dla v1".into());
+        }
+        (String::new(), 0)
+    } else {
+        let operator = o.operator.clone().ok_or("v1: podaj --operator (SPEC.md §7)")?;
+        chain::check_operator(&operator)?;
+        let s_ref = o.s_ref.ok_or("v1: podaj --s-ref, wspolna predkosc odniesienia (SPEC.md §10)")?;
+        if s_ref < 1 {
+            return Err("--s-ref musi byc >= 1".into());
+        }
+        (operator, s_ref)
+    };
     let (btc, checkpoint, _) = read_inputs_file(&p)?;
     // pomiar rozruchowy: ta sama glebokosc i ta sama wersja SHA-256 co odcinki
     let chi = sha256::digest(o.backend, b"sigelith-hourglass genesis bench");
@@ -113,6 +131,7 @@ pub fn genesis(dir: &Path, o: &GenesisOpts) -> Result<(), String> {
     let s_self = (h.calls as f64 / start.elapsed().as_secs_f64().max(1e-6)) as u64;
     let g = Genesis {
         tag: o.tag.clone(),
+        operator,
         n: o.n,
         t: o.t,
         lambda: o.lambda,
@@ -121,6 +140,7 @@ pub fn genesis(dir: &Path, o: &GenesisOpts) -> Result<(), String> {
         utc: util::utc_string(util::now_micros()),
         k_assumed: o.k,
         s_self: s_self.max(1),
+        s_ref,
     };
     let root = g.root(o.backend)?;
     io(fs::create_dir_all(dir), dir)?;
@@ -132,15 +152,23 @@ pub fn genesis(dir: &Path, o: &GenesisOpts) -> Result<(), String> {
         ("t", g.t.to_string()),
         ("lambda", g.lambda.to_string()),
         ("k_assumed", g.k_assumed.to_string()),
+        // p0: w genesis.json; v1: tylko tu, informacyjnie (w rekordach jest predkosc kazdego odcinka)
         ("s_self_nodes_per_s", g.s_self.to_string()),
         ("utc", g.utc.clone()),
         ("root", hex::encode(&root)),
     ] {
         kv.insert(k.to_string(), v);
     }
+    if g.tag != "p0" {
+        kv.insert("operator".to_string(), g.operator.clone());
+        kv.insert("s_ref_nodes_per_s".to_string(), g.s_ref.to_string());
+    }
     util::write_kv(&p.genesis_kv(), &kv)?;
     println!("genesis: {} | n = {}, t = {}, lambda = {}, k = {}, s_self = {} wezlow/s",
              p.genesis_json().display(), g.n, g.t, g.lambda, g.k_assumed, g.s_self);
+    if g.tag != "p0" {
+        println!("operator = {}, s_ref = {} wezlow/s", g.operator, g.s_ref);
+    }
     println!("phi_0 = {}", hex::encode(&root));
     Ok(())
 }
@@ -349,6 +377,8 @@ struct Params {
     t: u32,
     lambda: u32,
     k: u64,
+    /// v1: predkosc odniesienia z genesis.txt; p0: 0 (pole nie wchodzi do rekordu)
+    s_ref: u64,
     top: u32,
 }
 
@@ -356,12 +386,15 @@ pub fn run(dir: &Path, o: &RunOpts) -> Result<(), String> {
     let p = Paths { dir: dir.to_path_buf() };
     let g = util::read_kv(&p.genesis_kv())?;
     let n: u32 = util::get_num(&g, "n")?;
+    let tag = util::get(&g, "tag")?.to_string();
+    let s_ref = if tag == "p0" { 0 } else { util::get_num(&g, "s_ref_nodes_per_s")? };
     let prm = Params {
-        tag: util::get(&g, "tag")?.to_string(),
+        tag,
         n,
         t: util::get_num(&g, "t")?,
         lambda: util::get_num(&g, "lambda")?,
         k: util::get_num(&g, "k_assumed")?,
+        s_ref,
         top: o.top.unwrap_or_else(|| default_top(n)),
     };
     if prm.top > prm.n {
@@ -595,6 +628,7 @@ fn openings(p: &Paths, j: u64, top: Option<Top>, prm: &Params, backend: Backend)
         speed_max: util::get_num(&kv, "speed_max")?,
         ptb_offset_us: if ptb.is_empty() { None } else { Some(ptb.parse().map_err(|_| "zly ptb_offset_us")?) },
         k_assumed: prm.k,
+        s_ref: prm.s_ref,
     };
     util::write_atomic(&p.segments().join(chain::proof_file_name(j)), &proof)?;
     util::write_atomic(&p.segments().join(chain::record_file_name(j)), rec.json()?.canonical().as_bytes())?;
